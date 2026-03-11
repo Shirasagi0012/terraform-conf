@@ -4,7 +4,7 @@ locals {
 
 data "ct_config" "flatcar_ignition" {
   content = var.butane_config
-  strict  = true
+  strict  = false
 }
 
 module "upload_ignition" {
