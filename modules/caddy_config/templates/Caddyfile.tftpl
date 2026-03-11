@@ -1,0 +1,28 @@
+{
+    email ${email}
+}
+
+%{ for site in sites ~}
+${site.domain} {
+    %{ if site.tls_instruction != null }tls ${site.tls_instruction}%{ endif }
+    %{ if cloudflare_token != null }
+    tls {
+        dns cloudflare ${cloudflare_token}
+    }
+    %{ endif }
+    reverse_proxy ${join(" ", site.upstreams)} {
+        %{ if site.streaming != null }
+        %{ if site.streaming.flush_interval != null }flush_interval ${site.streaming.flush_interval}%{ endif }
+        %{ if site.streaming.stream_timeout != null }stream_timeout ${site.streaming.stream_timeout}%{ endif }
+        %{ if site.streaming.stream_close_delay != null }stream_close_delay ${site.streaming.stream_close_delay}%{ endif }
+        %{ endif }
+        %{ if site.transport != null }
+        transport http {
+            %{ if site.transport.tls_insecure_skip_verify == true }tls_insecure_skip_verify%{ endif }
+            %{ if site.transport.dial_timeout != null }dial_timeout ${site.transport.dial_timeout}%{ endif }
+            %{ if site.transport.keepalive != null }keepalive ${site.transport.keepalive}%{ endif }
+        }
+        %{ endif }
+    }
+}
+%{ endfor ~}

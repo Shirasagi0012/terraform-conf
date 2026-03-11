@@ -1,0 +1,22 @@
+variant: flatcar
+version: 1.1.0
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - ${ssh_public_key}
+storage:
+  files:
+    - path: /etc/systemd/network/10-static-eth0.network
+      mode: 0644
+      contents:
+        inline: |
+          ${indent(10, file("${path}/10-static-eth0.network"))}
+systemd:
+  units:
+    - name: sshkeys.service
+      enabled: false
+      mask: true
+    - name: coreos-metadata-sshkeys@core.service
+      enabled: false
+      mask: true

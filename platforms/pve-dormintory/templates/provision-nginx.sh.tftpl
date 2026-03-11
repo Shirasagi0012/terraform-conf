@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+log() {
+  printf '[%s] %s\n' "$(date --rfc-3339=seconds)" "$*"
+}
+
+retry() {
+  local attempts=$1
+  shift
+  local count=0
+  until "$@"; do
+    exit_code=$?
+    count=$((count + 1))
+    if [[ $${count} -ge $${attempts} ]]; then
+      log "Command '$*' failed after $${attempts} attempts"
+      return $${exit_code}
+    fi
+    sleep 3
+    log "Retrying '$*' ($${count}/$${attempts})"
+  done
+}
+
+log "Updating apt cache"
+retry 5 apt-get update
+
+log "Installing nginx package: ${nginx_package}"
+retry 5 apt-get install -y ${nginx_package}
+
+log "Writing nginx main configuration"
+install -d -m 0755 /etc/nginx/stream.d
+rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf || true
+
+cat <<'NGINX_MAIN' >/etc/nginx/nginx.conf
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+stream {
+  include /etc/nginx/stream.d/*.conf;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+    error_log   /var/log/nginx/error.log;
+
+    sendfile        on;
+    keepalive_timeout  65;
+
+    include /etc/nginx/conf.d/*.conf;
+}
+NGINX_MAIN
+
+cat <<'STREAM_BLOCK' >/etc/nginx/stream.d/tf-stream.conf
+${stream_config}
+STREAM_BLOCK
+
+log "Testing nginx configuration"
+nginx -t
+
+log "Enabling and restarting nginx"
+systemctl enable nginx >/dev/null 2>&1 || true
+systemctl restart nginx
+
+log "Nginx setup completed"

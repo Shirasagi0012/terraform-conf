@@ -1,0 +1,23 @@
+## Managed by Terraform. Edit `locals.manual_stream_servers` in `nginx.tf` instead of this file.
+%{ if length(servers) == 0 }
+# No stream servers configured. Update `locals.manual_stream_servers` in `nginx.tf` to add TCP/UDP proxies.
+%{ else }
+%{ for server in servers }
+upstream ${server.name}_upstream {
+%{ for backend in server.backends }
+    server ${backend.address}:${backend.port}%{ if backend.weight != null } weight=${backend.weight}%{ endif };
+%{ endfor }
+}
+
+server {
+    listen ${server.listen_address}:${server.listen_port}%{ if server.protocol == "udp" } udp%{ endif };
+    proxy_pass ${server.name}_upstream;
+    proxy_timeout ${server.proxy_timeout};
+    proxy_connect_timeout ${server.proxy_connect_timeout};
+%{ if server.protocol == "udp" }
+    proxy_responses 1;
+%{ endif }
+}
+
+%{ endfor }
+%{ endif }

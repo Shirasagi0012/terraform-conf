@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+log() {
+  printf '[%s] %s\n' "$(date --rfc-3339=seconds)" "$*"
+}
+
+retry() {
+  local attempts=$1
+  shift
+  local count=0
+  until "$@"; do
+    exit_code=$?
+    count=$((count + 1))
+    if [[ $${count} -ge $${attempts} ]]; then
+      log "Command '$*' failed after $${attempts} attempts"
+      return $${exit_code}
+    fi
+    sleep 3
+    log "Retrying '$*' ($${count}/$${attempts})"
+  done
+}
+
+log "Installing dependencies"
+retry 5 apt-get update
+retry 5 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+
+log "Adding Caddy repository"
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+
+log "Installing Caddy"
+retry 5 apt-get update
+retry 5 apt-get install -y caddy
+
+log "Adding Cloudflare DNS module"
+if ! caddy list-modules | grep -q "dns.providers.cloudflare"; then
+  retry 5 caddy add-package github.com/caddy-dns/cloudflare
+else
+  log "Cloudflare DNS module already added"
+fi
+
+log "Enabling and starting Caddy"
+systemctl enable caddy >/dev/null 2>&1 || true
+systemctl restart caddy
+
+log "Caddy setup completed"
