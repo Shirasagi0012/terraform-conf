@@ -66,8 +66,6 @@ jobs:
         with:
           commit_message: |
             plan: terraform plan and fmt
-            
-            ${{ steps.read_plan.outputs.PLAN_OUTPUT }}
           file_pattern: .
 
       - name: Upload Plan to Cloudflare R2
